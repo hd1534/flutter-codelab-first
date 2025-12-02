@@ -1,8 +1,12 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
+import 'dart:convert';
+
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(MyApp());
@@ -41,7 +45,28 @@ class MyAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  var favorites = <WordPair>[];
+  List<WordPair> favorites = [];
+  late Future<List<WordPair>> futureFavorites;
+
+  MyAppState() {
+    futureFavorites = fetchFavorites();
+  }
+
+  Future<List<WordPair>> fetchFavorites() async {
+    final response =
+        await http.get(Uri.parse('https://nahjh2.web.ajousw.kr/likes'));
+
+    List<WordPair> list = [];
+    var jsonData = jsonDecode(response.body);
+    print(jsonData);
+    for (Map<String, dynamic> obj in jsonData) {
+      List<String> res = obj["collectionId"].split("_");
+      list.add(WordPair(res[0], res[1]));
+    }
+    favorites = [...list];
+    notifyListeners();
+    return list;
+  }
 
   void toggleFavorite([WordPair? pair]) {
     pair = pair ?? current;
