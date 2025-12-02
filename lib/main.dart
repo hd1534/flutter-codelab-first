@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:english_words/english_words.dart';
@@ -8,7 +9,23 @@ import 'package:provider/provider.dart';
 
 import 'package:http/http.dart' as http;
 
+const String baseUrl = 'https://nahjh2.web.ajousw.kr';
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+        // Return true to accept all bad certificates, or implement specific logic
+        // to only accept certificates from certain hosts or with specific properties.
+        return true; // DANGEROUS: Accepts all bad certificates
+      };
+  }
+}
+
 void main() {
+  // https://nahjh2.web.ajousw.kr는 ssl이 제대로 설정되어 있지 않으므로.
+  HttpOverrides.global = MyHttpOverrides();
   runApp(MyApp());
 }
 
@@ -53,8 +70,7 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<List<WordPair>> fetchFavorites() async {
-    final response =
-        await http.get(Uri.parse('https://nahjh2.web.ajousw.kr/likes'));
+    final response = await http.get(Uri.parse('$baseUrl/likes'));
 
     List<WordPair> list = [];
     var jsonData = jsonDecode(response.body);
@@ -68,13 +84,34 @@ class MyAppState extends ChangeNotifier {
     return list;
   }
 
-  void toggleFavorite([WordPair? pair]) {
+  Future<void> toggleFavorite([WordPair? pair]) async {
+    var uri = '$baseUrl/likes';
+
     pair = pair ?? current;
+
     if (favorites.contains(pair)) {
+      uri += "/${pair.first}_${pair.second}";
+      final http.Response resp = await http.delete(Uri.parse(uri));
+      if (resp.statusCode != 200) {
+        return;
+      }
       favorites.remove(pair);
+      favorites = [...favorites];
     } else {
-      favorites.add(pair);
+      final http.Response resp = await http.post(Uri.parse(uri),
+          headers: <String, String>{
+            "Content-Type": "application/json; charset=UTF-8"
+          },
+          body: jsonEncode(<String, dynamic>{
+            "collectionId": "${pair.first}_${pair.second}",
+            "like": true
+          }));
+      if (resp.statusCode != 200) {
+        return;
+      }
+      favorites = [...favorites, pair];
     }
+    print(favorites);
     notifyListeners();
   }
 
